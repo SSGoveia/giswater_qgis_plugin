@@ -12,6 +12,7 @@ from qgis.core import QgsMapLayerRegistry, QgsFeatureRequest, QgsVectorLayer, Qg
 from qgis.core import QgsProject, QgsSingleSymbolRendererV2, QgsMarkerSymbolV2
 
 import utils_giswater
+from actions.multiple_selection import MultipleSelection
 from map_tools.parent import ParentMapTool
 from ui.cad_add_point import Cad_add_point
 from functools import partial
@@ -118,9 +119,21 @@ class CadAddPoint(ParentMapTool):
         self.cancel_map_tool()
 
     def select_feature(self):
+        self.controller.log_info(str("TEST 10"))
+        #self.canvas.selectionChanged.disconnect()
+        for layer in self.worker_layers:
+            self.controller.log_info(str(layer.name()))
+            features = layer.selectedFeatures()
+            if features:
+                break
+        multiple_selection = MultipleSelection(self.iface, self.controller, layer)
+        self.canvas.setMapTool(multiple_selection)
+        #self.disconnect_signal_selection_changed()
 
-        self.canvas.selectionChanged.disconnect()
-        features = self.worker_layer.selectedFeatures()
+
+        # cursor = self.get_cursor_multiple_selection()
+        self.canvas.setCursor(self.cursor)
+
 
         if len(features) == 0:
             return
@@ -129,6 +142,7 @@ class CadAddPoint(ParentMapTool):
             feature = f
 
         self.init_create_point_form()
+
         if not self.cancel_point:
             if self.virtual_layer_point:
                 sql = ("SELECT ST_GeomFromEWKT('SRID=" + str(self.srid) + ";" + str(feature.geometry().exportToWkt(3)) + "')")
@@ -149,7 +163,7 @@ class CadAddPoint(ParentMapTool):
                 self.virtual_layer_point.startEditing()
                 provider.addFeatures([feature])
                 self.virtual_layer_point.commitChanges()
-                self.canvas.selectionChanged.connect(partial(self.select_feature))
+                #self.canvas.selectionChanged.connect(partial(self.select_feature))
         else:
             self.iface.setActiveLayer(self.current_layer)
             self.cancel_map_tool()
@@ -189,34 +203,70 @@ class CadAddPoint(ParentMapTool):
         # Get current layer
         if self.iface.activeLayer():
             self.current_layer = self.iface.activeLayer()
-            self.controller.log_info(str(self.current_layer.name()))
+
 
         # Check for default base layer,
-        sql = ("SELECT value FROM " + self.controller.schema_name + ".config_param_user"
-               " WHERE cur_user = current_user AND parameter = 'cad_tools_base_layer_vdefault'")
-        row = self.controller.get_row(sql)
-        # If cad_tools_base_layer_vdefault exist prevails over selected layer
-        if row:
-            self.worker_layer = self.controller.get_layer_by_layername(row[0])
-            if self.worker_layer:
-                self.iface.setActiveLayer(self.worker_layer)
-            else:
-                self.worker_layer = self.iface.activeLayer()
-        else:
-            self.worker_layer = self.iface.activeLayer()
-
-        if self.worker_layer:
-            self.iface.legendInterface().setLayerVisible(self.worker_layer, True)
-
+        # sql = ("SELECT value FROM " + self.controller.schema_name + ".config_param_user"
+        #        " WHERE cur_user = current_user AND parameter = 'cad_tools_base_layer_vdefault_1'")
+        # row = self.controller.get_row(sql)
+        # # If cad_tools_base_layer_vdefault exist prevails over selected layer
+        # if row:
+        #     self.worker_layer = self.controller.get_layer_by_layername(row[0])
+        #     if self.worker_layer:
+        #         self.iface.setActiveLayer(self.worker_layer)
+        #     else:
+        #         self.worker_layer = self.iface.activeLayer()
+        # else:
+        #     self.worker_layer = self.iface.activeLayer()
+        #
+        # if self.worker_layer:
+        #     self.iface.legendInterface().setLayerVisible(self.worker_layer, True)
+        self.get_worker_layers()
         # Select map tool 'Select features' and set signal
         # Change cursor
 
-        self.iface.actionSelect().trigger()
-        #self.canvas.setCursor(self.cursor)
-        self.iface.setActiveLayer(self.worker_layer)
-        self.canvas.selectionChanged.connect(partial(self.select_feature))
+        # self.iface.actionSelect().trigger()
+        # #self.canvas.setCursor(self.cursor)
+        # self.iface.setActiveLayer(self.worker_layer)
+        # self.canvas.selectionChanged.connect(partial(self.select_feature))
+
+        self.select_feature()
 
 
+    def get_worker_layers(self):
+        sql = ("SELECT value FROM " + self.controller.schema_name + ".config_param_user"
+               " WHERE cur_user = current_user AND parameter = 'cad_tools_base_layer_vdefault_1'")
+        row = self.controller.get_row(sql)
+        # If cad_tools_base_layer_vdefault exist prevails over selected layer
+        self.worker_layers = []
+        if row:
+            self.worker_layer_1 = self.controller.get_layer_by_layername(row[0])
+            self.worker_layers.append(self.worker_layer_1)
+        sql = ("SELECT value FROM " + self.controller.schema_name + ".config_param_user"
+               " WHERE cur_user = current_user AND parameter = 'cad_tools_base_layer_vdefault_2'")
+        row = self.controller.get_row(sql)
+        # If cad_tools_base_layer_vdefault exist prevails over selected layer
+        if row:
+            self.worker_layer_2 = self.controller.get_layer_by_layername(row[0])
+            self.worker_layers.append(self.worker_layer_2)
+
+
+        sql = ("SELECT value FROM " + self.controller.schema_name + ".config_param_user"
+               " WHERE cur_user = current_user AND parameter = 'cad_tools_base_layer_vdefault_3'")
+        row = self.controller.get_row(sql)
+        # If cad_tools_base_layer_vdefault exist prevails over selected layer
+        if row:
+            self.worker_layer_3 = self.controller.get_layer_by_layername(row[0])
+            self.worker_layers.append(self.worker_layer_3)
+
+
+        # multiple_selection = MultipleSelection(self.iface, self.controller, self.worker_layers)
+        # self.canvas.setMapTool(multiple_selection)
+        # self.disconnect_signal_selection_changed()
+        # self.select_feature()
+        #
+        # #cursor = self.get_cursor_multiple_selection()
+        # self.canvas.setCursor(self.cursor)
 
 
     def deactivate(self):
@@ -229,3 +279,11 @@ class CadAddPoint(ParentMapTool):
             pass
         finally:
             ParentMapTool.deactivate(self)
+
+    def disconnect_signal_selection_changed(self):
+        """ Disconnect signal selectionChanged """
+
+        try:
+            self.canvas.selectionChanged.disconnect()
+        except Exception:
+            pass
