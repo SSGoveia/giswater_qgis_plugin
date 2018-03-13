@@ -6,16 +6,21 @@ or (at your option) any later version.
 '''
 
 # -*- coding: utf-8 -*-
+
 from PyQt4.QtCore import Qt
+from PyQt4.QtGui import QColor
 from PyQt4.QtGui import QDoubleValidator
 from qgis.core import QgsMapLayerRegistry, QgsFeatureRequest, QgsVectorLayer, QgsFeature, QgsGeometry, QgsPoint
-from qgis.core import QgsProject, QgsSingleSymbolRendererV2, QgsMarkerSymbolV2
+from qgis.core import QgsProject, QgsSingleSymbolRendererV2
+from qgis.core import QgsSymbolLayerV2Registry, QgsMarkerSymbolV2, QgsSymbolV2, QgsMarkerLineSymbolLayerV2, QgsSimpleMarkerSymbolLayerBase, QgsLineSymbolV2, QgsSimpleMarkerSymbolLayerV2
 
 import utils_giswater
 from actions.multiple_selection import MultipleSelection
 from map_tools.parent import ParentMapTool
 from ui.cad_add_point import Cad_add_point
 from functools import partial
+
+
 
 
 class CadAddPoint(ParentMapTool):
@@ -122,7 +127,7 @@ class CadAddPoint(ParentMapTool):
         self.controller.log_info(str("TEST 10"))
         #self.canvas.selectionChanged.disconnect()
         for layer in self.worker_layers:
-            self.controller.log_info(str(layer.name()))
+
             features = layer.selectedFeatures()
             if features:
                 break
@@ -230,25 +235,30 @@ class CadAddPoint(ParentMapTool):
         # self.iface.setActiveLayer(self.worker_layer)
         # self.canvas.selectionChanged.connect(partial(self.select_feature))
 
-        self.select_feature()
+        #self.select_feature()
 
 
     def get_worker_layers(self):
+        self.worker_layers = {}
         sql = ("SELECT value FROM " + self.controller.schema_name + ".config_param_user"
                " WHERE cur_user = current_user AND parameter = 'cad_tools_base_layer_vdefault_1'")
         row = self.controller.get_row(sql)
         # If cad_tools_base_layer_vdefault exist prevails over selected layer
-        self.worker_layers = []
         if row:
             self.worker_layer_1 = self.controller.get_layer_by_layername(row[0])
-            self.worker_layers.append(self.worker_layer_1)
+
+            self.test1()
+
+
+
+
         sql = ("SELECT value FROM " + self.controller.schema_name + ".config_param_user"
                " WHERE cur_user = current_user AND parameter = 'cad_tools_base_layer_vdefault_2'")
         row = self.controller.get_row(sql)
         # If cad_tools_base_layer_vdefault exist prevails over selected layer
         if row:
             self.worker_layer_2 = self.controller.get_layer_by_layername(row[0])
-            self.worker_layers.append(self.worker_layer_2)
+            self.worker_layers['worker_layer_2'] = self.worker_layer_2
 
 
         sql = ("SELECT value FROM " + self.controller.schema_name + ".config_param_user"
@@ -257,7 +267,7 @@ class CadAddPoint(ParentMapTool):
         # If cad_tools_base_layer_vdefault exist prevails over selected layer
         if row:
             self.worker_layer_3 = self.controller.get_layer_by_layername(row[0])
-            self.worker_layers.append(self.worker_layer_3)
+            self.worker_layers['worker_layer_3'] = self.worker_layer_3
 
 
         # multiple_selection = MultipleSelection(self.iface, self.controller, self.worker_layers)
@@ -268,9 +278,76 @@ class CadAddPoint(ParentMapTool):
         # #cursor = self.get_cursor_multiple_selection()
         # self.canvas.setCursor(self.cursor)
 
+    def test2(self):
+        self.controller.log_info(str("--------------------"))
+        symbol = QgsMarkerSymbolV2.createSimple()
+        properties = {'size': '5.0', 'color': '255,0,0,255', 'type': 'arrow', 'interval': '5'}
+        # Configure the marker.
+        simple_marker = QgsSimpleMarkerSymbolLayerV2()
+        simple_marker.setShape(QgsSimpleMarkerSymbolLayerBase.ArrowHead)
+        simple_marker.setSize(2)
+        simple_marker.setAngle(0)
+        simple_marker.setColor(QColor(255, 0, 0))
+        simple_marker.setOutlineColor(QColor(255, 0, 0))
+        symbol.appendSymbolLayer(simple_marker)
+
+
+        self.worker_layer_1.rendererV2().setSymbol(symbol)
+        self.worker_layer_1.triggerRepaint()
+        self.controller.log_info(str("********************"))
+
+    def test1(self):
+        self.controller.log_info(str("--------------------"))
+        self.controller.log_info(str(self.worker_layer_1.rendererV2().symbol().symbolLayers()[0].properties()))
+        self.controller.log_info(str(self.worker_layer_1.rendererV2().symbol().symbolLayers()[0]))
+        self.controller.log_info(str(self.worker_layer_1.rendererV2().symbol()))
+        self.controller.log_info(str(self.worker_layer_1.rendererV2()))
+
+        self.controller.log_info(str("--------------------"))
+        self.worker_layer_1_properties = self.worker_layer_1.rendererV2()
+
+        # Base style.
+        line = QgsLineSymbolV2()
+
+        # Create an marker line.
+        marker_line = QgsMarkerLineSymbolLayerV2()
+        marker_line.setInterval(15)
+
+        # Configure the marker.
+        simple_marker = QgsSimpleMarkerSymbolLayerV2()
+        simple_marker.setShape(QgsSimpleMarkerSymbolLayerBase.ArrowHead)
+        simple_marker.setSize(2)
+        simple_marker.setAngle(0)
+        simple_marker.setColor(QColor(255, 0, 0))
+        simple_marker.setOutlineColor(QColor(255, 0, 0))
+        # The marker has its own symbol layer.
+        marker = QgsMarkerSymbolV2()
+        marker.changeSymbolLayer(0, simple_marker)
+        # Add the layer to the marker layer.
+        marker_line.setSubSymbol(marker)
+        # Finally replace the symbol layer in the base style.
+        line.appendSymbolLayer(marker_line)
+        # Add the style to the line layer.
+        renderer = QgsSingleSymbolRendererV2(line)
+        self.worker_layer_1.setRendererV2(renderer)
+        self.worker_layer_1.triggerRepaint()
+        self.controller.log_info(str(self.worker_layer_1.rendererV2().symbol().symbolLayers()[0].properties()))
+        self.controller.log_info(str("*********************"))
+        self.controller.log_info(str(self.worker_layer_1.rendererV2().symbol().symbolLayers()[0].properties()))
+        self.controller.log_info(str(self.worker_layer_1.rendererV2().symbol().symbolLayers()[0]))#QgsSimpleLineSymbolLayerV2
+        self.controller.log_info(str(self.worker_layer_1.rendererV2().symbol()))#QgsLineSymbolV2
+        self.controller.log_info(str(self.worker_layer_1.rendererV2()))#QgsSingleSymbolRendererV2
+        self.controller.log_info(str(self.worker_layer_1.rendererV2()))
+        self.controller.log_info(str("************************"))
+        self.worker_layers['worker_layer_1'] = self.worker_layer_1
+        self.controller.log_info(str("TESTING"))
+
 
     def deactivate(self):
         # Call parent method
+
+        self.worker_layer_1.setRendererV2(self.worker_layer_1_properties)
+        self.worker_layer_1.triggerRepaint()
         try:
             if self.current_layer:
                 self.iface.setActiveLayer(self.current_layer)
