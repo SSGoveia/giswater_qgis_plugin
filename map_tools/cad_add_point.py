@@ -6,21 +6,16 @@ or (at your option) any later version.
 '''
 
 # -*- coding: utf-8 -*-
-
 from PyQt4.QtCore import Qt
 from PyQt4.QtGui import QColor
 from PyQt4.QtGui import QDoubleValidator
 from qgis.core import QgsMapLayerRegistry, QgsFeatureRequest, QgsVectorLayer, QgsFeature, QgsGeometry, QgsPoint
-from qgis.core import QgsProject, QgsSingleSymbolRendererV2
-from qgis.core import QgsSymbolLayerV2Registry, QgsMarkerSymbolV2, QgsSymbolV2, QgsMarkerLineSymbolLayerV2, QgsSimpleMarkerSymbolLayerBase, QgsLineSymbolV2, QgsSimpleMarkerSymbolLayerV2
-
+from qgis.core import QgsProject, QgsSingleSymbolRendererV2, QgsMarkerSymbolV2
+from qgis.core import QgsSimpleMarkerSymbolLayerV2, QgsSimpleMarkerSymbolLayerBase, QgsMarkerLineSymbolLayerV2
 import utils_giswater
-from actions.multiple_selection import MultipleSelection
 from map_tools.parent import ParentMapTool
 from ui.cad_add_point import Cad_add_point
 from functools import partial
-
-
 
 
 class CadAddPoint(ParentMapTool):
@@ -44,12 +39,12 @@ class CadAddPoint(ParentMapTool):
 
         virtual_layer_name = "point"
         sql = ("SELECT value FROM " + self.controller.schema_name + ".config_param_user"
-               " WHERE cur_user = current_user AND parameter = 'virtual_layer_point'")        
+               " WHERE cur_user = current_user AND parameter = 'virtual_layer_point'")
         row = self.controller.get_row(sql)
 
         if row:
             virtual_layer_name = row[0]
-        
+
         if self.exist_virtual_layer(virtual_layer_name):
             self.get_point(virtual_layer_name)
         else:
@@ -108,7 +103,7 @@ class CadAddPoint(ParentMapTool):
 
         self.dist_x = self.dlg_create_point.dist_x.text()
         self.dist_y = self.dlg_create_point.dist_y.text()
-        if self.virtual_layer_point:        
+        if self.virtual_layer_point:
             self.virtual_layer_point.startEditing()
             self.close_dialog(self.dlg_create_point)
 
@@ -117,28 +112,16 @@ class CadAddPoint(ParentMapTool):
 
         self.close_dialog(self.dlg_create_point)
         self.iface.setActiveLayer(self.current_layer)
-        if self.virtual_layer_point:        
+        if self.virtual_layer_point:
             if self.virtual_layer_point.isEditable():
                 self.virtual_layer_point.commitChanges()
         self.cancel_point = True
         self.cancel_map_tool()
 
     def select_feature(self):
-        self.controller.log_info(str("TEST 10"))
-        #self.canvas.selectionChanged.disconnect()
-        for layer in self.worker_layers:
 
-            features = layer.selectedFeatures()
-            if features:
-                break
-        multiple_selection = MultipleSelection(self.iface, self.controller, layer)
-        self.canvas.setMapTool(multiple_selection)
-        #self.disconnect_signal_selection_changed()
-
-
-        # cursor = self.get_cursor_multiple_selection()
-        self.canvas.setCursor(self.cursor)
-
+        self.canvas.selectionChanged.disconnect()
+        features = self.worker_layer.selectedFeatures()
 
         if len(features) == 0:
             return
@@ -147,7 +130,6 @@ class CadAddPoint(ParentMapTool):
             feature = f
 
         self.init_create_point_form()
-
         if not self.cancel_point:
             if self.virtual_layer_point:
                 sql = ("SELECT ST_GeomFromEWKT('SRID=" + str(self.srid) + ";" + str(feature.geometry().exportToWkt(3)) + "')")
@@ -168,14 +150,37 @@ class CadAddPoint(ParentMapTool):
                 self.virtual_layer_point.startEditing()
                 provider.addFeatures([feature])
                 self.virtual_layer_point.commitChanges()
-                #self.canvas.selectionChanged.connect(partial(self.select_feature))
+                self.canvas.selectionChanged.connect(partial(self.select_feature))
         else:
             self.iface.setActiveLayer(self.current_layer)
             self.cancel_map_tool()
             self.cancel_point = False
             return
 
+    def set_markers_direction_to_layers(self, layer):
 
+        # Cogemos el marker existente(en este caso la linea)
+        symbols = layer.rendererV2().symbols()
+        sym = symbols[0]
+        # sym.setColor(QColor.fromRgb(255, 0, 255))
+
+        # Creamos el marker (las flechas)
+        simple_marker = QgsSimpleMarkerSymbolLayerV2()
+        simple_marker.setShape(QgsSimpleMarkerSymbolLayerBase.ArrowHead)
+        simple_marker.setSize(2)
+        simple_marker.setAngle(0)
+        simple_marker.setColor(QColor(255, 0, 0))
+        simple_marker.setOutlineColor(QColor(255, 0, 0))
+        marker = QgsMarkerSymbolV2()
+        marker.changeSymbolLayer(0, simple_marker)
+        # Create an marker line.
+        marker_line = QgsMarkerLineSymbolLayerV2()
+        marker_line.setInterval(15)
+        # Add the layer to the marker layer.
+        marker_line.setSubSymbol(marker)
+        sym.appendSymbolLayer(marker_line)
+
+        layer.triggerRepaint()
 
     """ QgsMapTools inherited event functions """
 
@@ -208,139 +213,32 @@ class CadAddPoint(ParentMapTool):
         # Get current layer
         if self.iface.activeLayer():
             self.current_layer = self.iface.activeLayer()
-
+            self.controller.log_info(str(self.current_layer.name()))
 
         # Check for default base layer,
-        # sql = ("SELECT value FROM " + self.controller.schema_name + ".config_param_user"
-        #        " WHERE cur_user = current_user AND parameter = 'cad_tools_base_layer_vdefault_1'")
-        # row = self.controller.get_row(sql)
-        # # If cad_tools_base_layer_vdefault exist prevails over selected layer
-        # if row:
-        #     self.worker_layer = self.controller.get_layer_by_layername(row[0])
-        #     if self.worker_layer:
-        #         self.iface.setActiveLayer(self.worker_layer)
-        #     else:
-        #         self.worker_layer = self.iface.activeLayer()
-        # else:
-        #     self.worker_layer = self.iface.activeLayer()
-        #
-        # if self.worker_layer:
-        #     self.iface.legendInterface().setLayerVisible(self.worker_layer, True)
-        self.get_worker_layers()
-        # Select map tool 'Select features' and set signal
-        # Change cursor
-
-        # self.iface.actionSelect().trigger()
-        # #self.canvas.setCursor(self.cursor)
-        # self.iface.setActiveLayer(self.worker_layer)
-        # self.canvas.selectionChanged.connect(partial(self.select_feature))
-
-        #self.select_feature()
-
-
-    def get_worker_layers(self):
-        self.worker_layers = {}
         sql = ("SELECT value FROM " + self.controller.schema_name + ".config_param_user"
                " WHERE cur_user = current_user AND parameter = 'cad_tools_base_layer_vdefault_1'")
         row = self.controller.get_row(sql)
         # If cad_tools_base_layer_vdefault exist prevails over selected layer
         if row:
-            self.worker_layer_1 = self.controller.get_layer_by_layername(row[0])
+            self.worker_layer = self.controller.get_layer_by_layername(row[0])
+            if self.worker_layer:
+                self.iface.setActiveLayer(self.worker_layer)
+            else:
+                self.worker_layer = self.iface.activeLayer()
+        else:
+            self.worker_layer = self.iface.activeLayer()
 
-            self.test1()
+        if self.worker_layer:
+            self.iface.legendInterface().setLayerVisible(self.worker_layer, True)
+        self.set_markers_direction_to_layers(self.worker_layer)
+        # Select map tool 'Select features' and set signal
+        # Change cursor
 
-
-
-
-        sql = ("SELECT value FROM " + self.controller.schema_name + ".config_param_user"
-               " WHERE cur_user = current_user AND parameter = 'cad_tools_base_layer_vdefault_2'")
-        row = self.controller.get_row(sql)
-        # If cad_tools_base_layer_vdefault exist prevails over selected layer
-        if row:
-            self.worker_layer_2 = self.controller.get_layer_by_layername(row[0])
-            self.worker_layers['worker_layer_2'] = self.worker_layer_2
-
-
-        sql = ("SELECT value FROM " + self.controller.schema_name + ".config_param_user"
-               " WHERE cur_user = current_user AND parameter = 'cad_tools_base_layer_vdefault_3'")
-        row = self.controller.get_row(sql)
-        # If cad_tools_base_layer_vdefault exist prevails over selected layer
-        if row:
-            self.worker_layer_3 = self.controller.get_layer_by_layername(row[0])
-            self.worker_layers['worker_layer_3'] = self.worker_layer_3
-
-
-        # multiple_selection = MultipleSelection(self.iface, self.controller, self.worker_layers)
-        # self.canvas.setMapTool(multiple_selection)
-        # self.disconnect_signal_selection_changed()
-        # self.select_feature()
-        #
-        # #cursor = self.get_cursor_multiple_selection()
-        # self.canvas.setCursor(self.cursor)
-
-    def test2(self):
-        self.controller.log_info(str("--------------------"))
-        symbol = QgsMarkerSymbolV2.createSimple()
-        properties = {'size': '5.0', 'color': '255,0,0,255', 'type': 'arrow', 'interval': '5'}
-        # Configure the marker.
-        simple_marker = QgsSimpleMarkerSymbolLayerV2()
-        simple_marker.setShape(QgsSimpleMarkerSymbolLayerBase.ArrowHead)
-        simple_marker.setSize(2)
-        simple_marker.setAngle(0)
-        simple_marker.setColor(QColor(255, 0, 0))
-        simple_marker.setOutlineColor(QColor(255, 0, 0))
-        symbol.appendSymbolLayer(simple_marker)
-
-
-        self.worker_layer_1.rendererV2().setSymbol(symbol)
-        self.worker_layer_1.triggerRepaint()
-        self.controller.log_info(str("********************"))
-
-    def test1(self):
-        self.controller.log_info(str("--------------------"))
-        self.controller.log_info(str(self.worker_layer_1.rendererV2().symbol().symbolLayers()[0].properties()))
-        self.controller.log_info(str(self.worker_layer_1.rendererV2().symbol().symbolLayers()[0]))
-        self.controller.log_info(str(self.worker_layer_1.rendererV2().symbol()))
-        self.controller.log_info(str(self.worker_layer_1.rendererV2()))
-
-        self.controller.log_info(str("--------------------"))
-        self.worker_layer_1_properties = self.worker_layer_1.rendererV2()
-
-        # Base style.
-        line = QgsLineSymbolV2()
-
-        # Create an marker line.
-        marker_line = QgsMarkerLineSymbolLayerV2()
-        marker_line.setInterval(15)
-
-        # Configure the marker.
-        simple_marker = QgsSimpleMarkerSymbolLayerV2()
-        simple_marker.setShape(QgsSimpleMarkerSymbolLayerBase.ArrowHead)
-        simple_marker.setSize(2)
-        simple_marker.setAngle(0)
-        simple_marker.setColor(QColor(255, 0, 0))
-        simple_marker.setOutlineColor(QColor(255, 0, 0))
-        # The marker has its own symbol layer.
-        marker = QgsMarkerSymbolV2()
-        marker.changeSymbolLayer(0, simple_marker)
-        # Add the layer to the marker layer.
-        marker_line.setSubSymbol(marker)
-        # Finally replace the symbol layer in the base style.
-        line.appendSymbolLayer(marker_line)
-        # Add the style to the line layer.
-        renderer = QgsSingleSymbolRendererV2(line)
-        self.worker_layer_1.setRendererV2(renderer)
-        self.worker_layer_1.triggerRepaint()
-        self.controller.log_info(str(self.worker_layer_1.rendererV2().symbol().symbolLayers()[0].properties()))
-        self.controller.log_info(str("*********************"))
-        self.controller.log_info(str(self.worker_layer_1.rendererV2().symbol().symbolLayers()[0].properties()))
-        self.controller.log_info(str(self.worker_layer_1.rendererV2().symbol().symbolLayers()[0]))#QgsSimpleLineSymbolLayerV2
-        self.controller.log_info(str(self.worker_layer_1.rendererV2().symbol()))#QgsLineSymbolV2
-        self.controller.log_info(str(self.worker_layer_1.rendererV2()))#QgsSingleSymbolRendererV2
-        self.controller.log_info(str(self.worker_layer_1.rendererV2()))
-        self.controller.log_info(str("************************"))
-        self.worker_layers['worker_layer_1'] = self.worker_layer_1
-        self.controller.log_info(str("TESTING"))
+        self.iface.actionSelect().trigger()
+        #self.canvas.setCursor(self.cursor)
+        self.iface.setActiveLayer(self.worker_layer)
+        self.canvas.selectionChanged.connect(partial(self.select_feature))
 
 
     def deactivate(self):
